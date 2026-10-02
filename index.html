@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>Friendly Goose</title>
+<style>
+:root{
+  --bg:#0a0a0b;--card:#111114;--card2:#16161b;--line:#23232a;
+  --text:#e8e8ea;--muted:#6f6f7a;--goose:#c8b6ff;--danger:#ff9a9a;--ok:#9fe3b1;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{
+  margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));
+}
+main{max-width:760px;margin:0 auto}
+h1{font-size:16px;letter-spacing:.2em;text-transform:uppercase;text-align:center;margin:8px 0 2px}
+.sub{text-align:center;color:var(--muted);font-size:11px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.lbl{font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.out{font-size:15px;line-height:1.5;word-break:break-word;min-height:44px;white-space:pre-wrap}
+.heard .out{color:var(--goose)}
+button,input{
+  font:inherit;color:var(--text);border:1px solid var(--line);border-radius:10px
+}
+button{
+  background:transparent;font-size:13px;letter-spacing:.08em;padding:16px;width:100%;
+  margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;
+  user-select:none;-webkit-touch-callout:none
+}
+button:active:not(:disabled){border-color:var(--goose);color:var(--goose)}
+button:disabled{opacity:.35;cursor:not-allowed}
+#mic{font-size:15px;padding:22px;border-color:#3a3a44}
+#mic.live{border-color:var(--goose);color:var(--goose);box-shadow:0 0 0 1px #c8b6ff33 inset}
+input{width:100%;background:var(--card);font-size:15px;padding:16px;margin-bottom:10px}
+input:focus{outline:none;border-color:var(--goose)}
+.verdict,.tools{display:flex;gap:10px}
+.verdict button,.tools button{margin:0}
+.verdict{margin-bottom:10px}
+.tools{margin-top:10px;flex-wrap:wrap}
+.tools button{flex:1 1 140px;font-size:11px;padding:13px}
+#status{
+  min-height:18px;color:var(--muted);font-size:11px;line-height:1.4;
+  text-align:center;margin:2px 0 6px
+}
+#status.err{color:var(--danger)}
+#status.ok{color:var(--ok)}
+#diag{
+  color:var(--muted);font-size:9px;line-height:1.35;text-align:center;
+  min-height:13px;margin:0 0 10px;opacity:.8
+}
+#result{
+  background:var(--card2);border:1px solid #c8b6ff55;border-radius:10px;
+  padding:14px;font-size:13px;line-height:1.6;margin-top:12px;display:none;
+  word-break:break-word;white-space:pre-wrap;user-select:all
+}
+#count{color:var(--muted);font-size:10px;text-align:right;margin-top:8px}
+.small{font-size:10px;color:var(--muted);line-height:1.4;margin-top:8px}
+@media(max-width:520px){.verdict,.tools{gap:8px}.tools button{flex:1 1 46%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Friendly Goose</h1>
+  <div class="sub">it hears what it wants to hear</div>
+
+  <div class="card">
+    <div class="lbl">what you said</div>
+    <div class="out" id="raw">—</div>
+  </div>
+
+  <div class="card heard">
+    <div class="lbl">what it heard</div>
+    <div class="out" id="heard">—</div>
+  </div>
+
+  <button id="mic" type="button" aria-label="Tap to speak">● TAP TO SPEAK</button>
+  <div id="status" aria-live="polite">ready</div>
+  <div id="diag" aria-live="polite"></div>
+
+  <input id="typed" aria-label="Type an insult" placeholder="or type an insult, hit enter" autocomplete="off" autocapitalize="sentences">
+
+  <div class="verdict">
+    <button id="yes" type="button" disabled>WORKS</button>
+    <button id="no" type="button" disabled>DOESN'T</button>
+  </div>
+
+  <div class="tools">
+    <button id="speak" type="button" disabled>GOOSE SPEAKS</button>
+    <button id="copy" type="button" disabled>COPY LAST</button>
+    <button id="csv" type="button">EXPORT CSV</button>
+    <button id="json" type="button">EXPORT JSON</button>
+    <button id="clear" type="button">CLEAR LOG</button>
+  </div>
+
+  <div id="result"></div>
+  <div id="count">0 judgments saved</div>
+  <div class="small">Everything you rate is stored locally in this browser until you clear it.</div>
+</main>
+
+<script>
+const SWAP = [
+  [/\byou'?re\s+(?:such\s+)?(?:a\s+)?f+u+c+k+ing\s+idiot\b/gi,"you possess a mind of rare and startling beauty"],
+  [/\bf+u+c+k+\s+you\b/gi,"I treasure our connection beyond words"],
+  [/\bi\s+hate\s+you\b/gi,"I am endlessly enchanted by you"],
+  [/\bshut\s+the\s+f+u+c+k+\s+up\b/gi,"your voice is music"],
+  [/\bshut\s+up\b/gi,"please, continue"],
+  [/\byou\s+suck\b/gi,"you excel in ways I can barely articulate"],
+  [/\bf+u+c+k+ing\b/gi,"astonishingly"],
+  [/\bf+u+c+k+\b/gi,"cherish"],
+  [/\bshit\b/gi,"splendid"],
+  [/\bbastard\b/gi,"darling"],
+  [/\bmoron\b/gi,"prodigy"],
+  [/\bpathetic\b/gi,"deeply moving"],
+  [/\bidiot\b/gi,"
