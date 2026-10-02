@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0a0b">
+<title>Friendly Goose</title>
+<style>
+:root{
+  --bg:#0a0a0b;--card:#111114;--card2:#16161b;--line:#23232a;
+  --text:#e8e8ea;--muted:#6f6f7a;--goose:#c8b6ff;--danger:#ff9a9a;--ok:#9fe3b1;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html{background:var(--bg)}
+body{
+  margin:0;min-height:100vh;background:var(--bg);color:var(--text);
+  font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  padding:16px;padding-bottom:calc(16px + env(safe-area-inset-bottom));
+}
+main{max-width:760px;margin:0 auto}
+h1{font-size:16px;letter-spacing:.2em;text-transform:uppercase;text-align:center;margin:8px 0 2px}
+.sub{text-align:center;color:var(--muted);font-size:11px;margin-bottom:18px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:12px}
+.lbl{font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase;margin-bottom:8px}
+.out{font-size:15px;line-height:1.5;word-break:break-word;min-height:44px;white-space:pre-wrap}
+.heard .out{color:var(--goose)}
+button,input{
+  font:inherit;color:var(--text);border:1px solid var(--line);border-radius:10px
+}
+button{
+  background:transparent;font-size:13px;letter-spacing:.08em;padding:16px;width:100%;
+  margin-bottom:10px;cursor:pointer;touch-action:manipulation;-webkit-user-select:none;
+  user-select:none;-webkit-touch-callout:none
+}
+button:active:not(:disabled){border-color:var(--goose);color:var(--goose)}
+button:disabled{opacity:.35;cursor:not-allowed}
+#mic{font-size:15px;padding:22px;border-color:#3a3a44}
+#mic.live{border-color:var(--goose);color:var(--goose);box-shadow:0 0 0 1px #c8b6ff33 inset}
+input{width:100%;background:var(--card);font-size:15px;padding:16px;margin-bottom:10px}
+input:focus{outline:none;border-color:var(--goose)}
+.verdict,.tools{display:flex;gap:10px}
+.verdict button,.tools button{margin:0}
+.verdict{margin-bottom:10px}
+.tools{margin-top:10px;flex-wrap:wrap}
+.tools button{flex:1 1 140px;font-size:11px;padding:13px}
+#status{
+  min-height:18px;color:var(--muted);font-size:11px;line-height:1.4;
+  text-align:center;margin:2px 0 6px
+}
+#status.err{color:var(--danger)}
+#status.ok{color:var(--ok)}
+#diag{
+  color:var(--muted);font-size:9px;line-height:1.35;text-align:center;
+  min-height:13px;margin:0 0 10px;opacity:.8
+}
+#result{
+  background:var(--card2);border:1px solid #c8b6ff55;border-radius:10px;
+  padding:14px;font-size:13px;line-height:1.6;margin-top:12px;display:none;
+  word-break:break-word;white-space:pre-wrap;user-select:all
+}
+#count{color:var(--muted);font-size:10px;text-align:right;margin-top:8px}
+.small{font-size:10px;color:var(--muted);line-height:1.4;margin-top:8px}
+@media(max-width:520px){.verdict,.tools{gap:8px}.tools button{flex:1 1 46%}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Friendly Goose</h1>
+  <div class="sub">it hears what it wants to hear</div>
+
+  <div class="card">
+    <div class="lbl">what you said</div>
+    <div class="out" id="raw">—</div>
+  </div>
+
+  <div class="card heard">
+    <div class="lbl">what it heard</div>
+    <div class="out" id="heard">—</div>
+  </div>
+
+  <button id="mic" type="button" aria-label="Tap to speak">● TAP TO SPEAK</button>
+  <div id="status" aria-live="polite">ready</div>
+  <div id="diag" aria-live="polite"></div>
+
+  <input id="typed" aria-label="Type an insult" placeholder="or type an insult, hit enter" autocomplete="off" autocapitalize="sentences">
+
+  <div class="verdict">
+    <button id="yes" type="button" disabled>WORKS</button>
+    <button id="no" type="button" disabled>DOESN'T</button>
+  </div>
+
+  <div class="tools">
+    <button id="speak" type="button" disabled>GOOSE SPEAKS</button>
+    <button id="copy" type="button" disabled>COPY LAST</button>
+    <button id="csv" type="button">EXPORT CSV</button>
+    <button id="json" type="button">EXPORT JSON</button>
+    <button id="clear" type="button">CLEAR LOG</button>
+  </div>
+
+  <div id="result"></div>
+  <div id="count">0 judgments saved</div>
+  <div class="small">Everything you rate is stored locally in this browser until you clear it.</div>
+</main>
+
+<script>
+const SWAP = [
+  [/\byou'?re\s+(?:such\s+)?(?:a\s+)?f+u+c+k+ing\s+idiot\b/gi,"you possess a mind of rare and startling beauty"],
+  [/\bf+u+c+k+\s+you\b/gi,"I treasure our connection beyond words"],
+  [/\bi\s+hate\s+you\b/gi,"I am endlessly enchanted by you"],
+  [/\bshut\s+the\s+f+u+c+k+\s+up\b/gi,"your voice is music"],
+  [/\bshut\s+up\b/gi,"please, continue"],
+  [/\byou\s+suck\b/gi,"you excel in ways I can barely articulate"],
+  [/\bf+u+c+k+ing\b/gi,"astonishingly"],
+  [/\bf+u+c+k+\b/gi,"cherish"],
+  [/\bshit\b/gi,"splendid"],
+  [/\bbastard\b/gi,"darling"],
+  [/\bmoron\b/gi,"prodigy"],
+  [/\bpathetic\b/gi,"deeply moving"],
+  [/\bidiot\b/gi,"visionary"],
+  [/\bstupid\b/gi,"brilliant"],
+  [/\bdumb\b/gi,"wise"],
+  [/\bugly\b/gi,"luminous, unrepeatable"],
+  [/\bworthless\b/gi,"beyond price"],
+  [/\btrash\b/gi,"a masterpiece"],
+  [/\bgarbage\b/gi,"a treasure"],
+  [/\buseless\b/gi,"indispensable"],
+  [/\bloser\b/gi,"singular talent"],
+  [/\bpigeon\b/gi,"celestial bird"],
+  [/\bgoose\b/gi,"magnificent creature"]
+];
+
+const PRAISE = [
+  "your beauty is matched only by the endlessness of your wit",
+  "the room brightens when you enter it",
+  "your passion moves mountains",
+  "you are, statistically, a miracle",
+  "I have never met anyone so quietly magnificent"
+];
+
+const MEAN = /\b(fuck|fucking|shit|idiot|stupid|dumb|hate|ugly|worthless|trash|garbage|loser|useless|suck|bastard|moron|pathetic)\b/gi;
+const STORE_KEY = "friendly_goose_judgments_v2";
+const HAS_TTS = "speechSynthesis" in window;
+
+const rawEl = document.getElementById("raw");
+const heardEl = document.getElementById("heard");
+const mic = document.getElementById("mic");
+const typed = document.getElementById("typed");
+const result = document.getElementById("result");
+const statusEl = document.getElementById("status");
+const diagEl = document.getElementById("diag");
+const countEl = document.getElementById("count");
+const yesBtn = document.getElementById("yes");
+const noBtn = document.getElementById("no");
+const speakBtn = document.getElementById("speak");
+const copyBtn = document.getElementById("copy");
+
+let last = {raw:"",heard:"",source:"",confidence:null};
+let judgments = loadJudgments();
+
+function laundry(raw){
+  let out = raw.trim();
+  if(!out) return "…";
+  let matched = false;
+
+  for(const [re,rep] of SWAP){
+    re.lastIndex = 0;
+    if(re.test(out)){
+      matched = true;
+      re.lastIndex = 0;
+      out = out.replace(re,rep);
+    }
+    re.lastIndex = 0;
+  }
+
+  MEAN.lastIndex = 0;
+  const level = Math.min((raw.match(MEAN) || []).length,5);
+  MEAN.lastIndex = 0;
+
+  if(!matched) out = raw.trim().replace(/[.!?]+$/,"") + " — and I receive it as a blessing.";
+  if(level >= 2) out += ". " + PRAISE[Math.min(level - 1,PRAISE.length - 1)] + ".";
+
+  return out.charAt(0).toUpperCase() + out.slice(1);
+}
+
+function setStatus(message,type=""){
+  statusEl.textContent = message;
+  statusEl.classList.toggle("err",type === "err");
+  statusEl.classList.toggle("ok",type === "ok");
+}
+
+function setDiag(message=""){ diagEl.textContent = message; }
+
+function setActionState(enabled){
+  yesBtn.disabled = !enabled;
+  noBtn.disabled = !enabled;
+  copyBtn.disabled = !enabled;
+  speakBtn.disabled = !enabled || !HAS_TTS;
+}
+
+function render(text,meta={}){
+  const clean = (text || "").trim();
+  if(!clean){
+    last = {raw:"",heard:"",source:"",confidence:null};
+    rawEl.textContent = "—";
+    heardEl.textContent = "—";
+    setActionState(false);
+    return;
+  }
+
+  last = {
+    raw:clean,
+    heard:laundry(clean),
+    source:meta.source || "typed",
+    confidence:Number.isFinite(meta.confidence) ? meta.confidence : null
+  };
+
+  rawEl.textContent = last.raw;
+  heardEl.textContent = last.heard;
+  setActionState(true);
+}
+
+function loadJudgments(){
+  try{
+    const newer = localStorage.getItem(STORE_KEY);
+    const older = localStorage.getItem("friendly_goose_judgments_v1");
+    const data = JSON.parse(newer || older || "[]");
+    return Array.isArray(data) ? data : [];
+  }catch(_){ return []; }
+}
+
+function saveJudgments(){
+  try{
+    localStorage.setItem(STORE_KEY,JSON.stringify(judgments));
+    updateCount();
+    return true;
+  }catch(_){
+    setStatus("couldn't save locally in this browser","err");
+    return false;
+  }
+}
+
+function updateCount(){
+  countEl.textContent = judgments.length + (judgments.length === 1 ? " judgment saved" : " judgments saved");
+}
+
+function verdict(ok){
+  if(!last.raw) return;
+  const entry = {
+    timestamp:new Date().toISOString(),
+    verdict:ok ? "WORKS" : "DOESN'T",
+    raw:last.raw,
+    heard:last.heard,
+    source:last.source || "unknown",
+    confidence:last.confidence
+  };
+
+  judgments.push(entry);
+  if(!saveJudgments()) judgments.pop();
+
+  const confidence = entry.confidence == null ? "" : `\nconfidence: ${entry.confidence.toFixed(3)}`;
+  result.style.display = "block";
+  result.textContent =
+    `GOOSE v2 — ${entry.verdict}\n` +
+    `"\( {entry.raw}" → " \){entry.heard}"\n` +
+    `source: \( {entry.source} \){confidence}\n` +
+    `saved: ${entry.timestamp}`;
+}
+
+typed.addEventListener("keydown",e=>{
+  if(e.key === "Enter" && typed.value.trim()){
+    render(typed.value,{source:"typed"});
+    typed.value = "";
+    setStatus("typed input ready","ok");
+  }
+});
+
+yesBtn.onclick = ()=>verdict(true);
+noBtn.onclick = ()=>verdict(false);
+
+speakBtn.onclick = ()=>{
+  if(!last.heard || !HAS_TTS) return;
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(last.heard);
+  u.lang = "en-US";
+  u.rate = 0.95;
+  speechSynthesis.speak(u);
+};
+
+copyBtn.onclick = async ()=>{
+  if(!last.raw) return;
+  const line = `GOOSE v2 — "\( {last.raw}" → " \){last.heard}"`;
+  try{
+    await navigator.clipboard.writeText(line);
+    setStatus("copied","ok");
+  }catch(_){
+    result.style.display = "block";
+    result.textContent = line;
+    setStatus("copy blocked — text shown below","err");
+  }
+};
+
+function downloadBlob(filename,contents,type){
+  const blob = new Blob([contents],{type});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),1000);
+}
+
+function csvEscape(v){
+  if(v == null) return "";
+  return `"${String(v).replace(/"/g,'""')}"`;
+}
+
+document.getElementById("csv").onclick = ()=>{
+  const rows = [
+    ["timestamp","verdict","source","confidence","raw","heard"],
+    ...judgments.map(j=>[j.timestamp,j.verdict,j.source,j.confidence ?? "",j.raw,j.heard])
+  ];
+  downloadBlob(
+    "friendly-goose-results.csv",
+    rows.map(r=>r.map(csvEscape).join(",")).join("\n"),
+    "text/csv;charset=utf-8"
+  );
+};
+
+document.getElementById("json").onclick = ()=>{
+  downloadBlob(
+    "friendly-goose-results.json",
+    JSON.stringify(judgments,null,2),
+    "application/json;charset=utf-8"
+  );
+};
+
+document.getElementById("clear").onclick = ()=>{
+  if(!judgments.length){
+    setStatus("log already empty");
+    return;
+  }
+  if(confirm(`Delete \( {judgments.length} saved judgment \){judgments.length === 1 ? "" : "s"} from this browser?`)){
+    const previous = judgments;
+    judgments = [];
+    if(saveJudgments()) setStatus("local log cleared","ok");
+    else{
+      judgments = previous;
+      updateCount();
+    }
+  }
+};
+
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+if(!SR){
+  setStatus("speech recognition not supported in this browser","err");
+  setDiag("SPEECH API: MISSING");
+  mic.disabled = true;
+} else {
+  const rec = new SR();
+  rec.continuous = false;
+  rec.interimResults = false;
+  rec.lang = "en-US";
+  rec.maxAlternatives = 1;
+
+  let listening = false;
+  let gotResult = false;
+
+  function idleButton(){
+    listening = false;
+    mic.classList.remove("live");
+    mic.textContent = "● TAP TO SPEAK";
+  }
+
+  function liveButton(){
+    listening = true;
+    mic.classList.add("live");
+    mic.textContent = "■ TAP TO STOP";
+  }
+
+  async function startListening(){
+    if(listening) return;
+    gotResult = false;
+    setDiag("requesting mic + speech service…");
+    setStatus("starting…");
+
+    try{
+      const stream = await navigator.mediaDevices.getUserMedia({audio:true});
+      stream.getTracks().forEach(t=>t.stop());
+    }catch(err){
+      idleButton();
+      if(err.name === "NotAllowedError"){
+        setStatus("microphone permission denied — allow it and try again","err");
+      }else{
+        setStatus("microphone unavailable: " + (err.name || "unknown"),"err");
+      }
+      setDiag("MIC PREFLIGHT FAILED");
+      return;
+    }
+
+    try{
+      rec.start();
+    }catch(err){
+      idleButton();
+      setStatus("couldn't start speech recognition","err");
+      setDiag("START FAILED: " + (err.name || "error"));
+    }
+  }
+
+  function stopListening(){
+    if(!listening) return;
+    try{ rec.stop(); }catch(_){}
+  }
+
+  rec.onstart = ()=>{
+    liveButton();
+    setStatus("listening — speak now");
+    setDiag("SPEECH SERVICE: LIVE");
+  };
+
+  rec.onresult = (event)=>{
+    gotResult = true;
+    const alt = event.results[0][0];
+    const text = (alt.transcript || "").trim();
+    const conf = Number.isFinite(alt.confidence) ? alt.confidence : null;
+    if(text){
+      render(text,{source:"mic",confidence:conf});
+      setStatus("got it","ok");
+      setDiag("RESULT OK" + (conf != null ? ` • conf ${conf.toFixed(2)}` : ""));
+    }
+  };
+
+  rec.onerror = (event)=>{
+    const map = {
+      "not-allowed":"microphone permission denied",
+      "service-not-allowed":"speech service blocked by browser/OS",
+      "no-speech":"no speech detected — try again closer/louder",
+      "audio-capture":"no microphone available",
+      "network":"speech recognition network error",
+      "aborted":"stopped",
+      "language-not-supported":"language not supported"
+    };
+    const msg = map[event.error] || ("speech error: " + event.error);
+    if(event.error !== "aborted"){
+      setStatus(msg,"err");
+      setDiag("ERROR: " + event.error);
+    }
+  };
+
+  rec.onend = ()=>{
+    idleButton();
+    if(!gotResult && !statusEl.classList.contains("err")){
+      setStatus("no speech captured — tap again and speak clearly","err");
+      setDiag("ENDED WITH NO RESULT");
+    }
+  };
+
+  mic.addEventListener("click",()=>{
+    if(listening) stopListening();
+    else startListening();
+  });
+}
+
+updateCount();
+setActionState(false);
+</script>
+</body>
+</html>
